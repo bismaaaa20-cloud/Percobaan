@@ -1,0 +1,101 @@
+-- [[ BISMA PREMIUM SCRIPT HUB ]]
+-- Proteksi Global: Menghindari skrip berjalan dobel
+if getgenv().BismaExecuted then
+    print("Skrip Bisma sudah aktif, tidak perlu memuat ulang!")
+    return
+end
+getgenv().BismaExecuted = true
+
+-- Menyiapkan Library UI (Bisma Edition)
+local Library = loadstring(game:HttpGet("https://githubusercontent.com"))()
+local Window = Library.CreateLib("Bisma", "DarkTheme")
+
+-- Konfigurasi Utama
+local Settings = {
+    AuraEnabled = false,
+    AuraRange = 250,
+    KillSpeed = 0.001,
+    AutoSkip = false,
+    SkipBypass = true
+}
+
+-- Pengaturan Tab UI
+local Main = Window:NewTab("Main Features")
+local Combat = Main:NewSection("Combat & Aura")
+local Farm = Main:NewSection("Auto Farming")
+
+-- [[ LOGIKA AURA: TARGET ZOMBIE & NPC ONLY ]]
+-- Fitur: Jarak Jauh, Membunuh Cepat, Mengabaikan Pemain Lain
+task.spawn(function()
+    while task.wait(Settings.KillSpeed) do
+        if Settings.AuraEnabled then
+            local Players = game:GetService("Players")
+            local LocalPlayer = Players.LocalPlayer
+            
+            -- Scan seluruh area game
+            for _, obj in pairs(game.Workspace:GetDescendants()) do
+                if obj:IsA("Humanoid") and obj.Health > 0 then
+                    local model = obj.Parent
+                    local isPlayer = Players:GetPlayerFromCharacter(model)
+                    
+                    -- Filter: Hanya serang jika BUKAN player manusia & BUKAN diri sendiri
+                    if not isPlayer and model ~= LocalPlayer.Character then
+                        local root = model:FindFirstChild("HumanoidRootPart")
+                        local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        
+                        if root and myRoot then
+                            local dist = (myRoot.Position - root.Position).Magnitude
+                            if dist <= Settings.AuraRange then
+                                -- Eksekusi Serangan (Mencari Remote secara otomatis)
+                                local AttackRemote = game:GetService("ReplicatedStorage"):FindFirstChild("Attack") or game:GetService("ReplicatedStorage"):FindFirstChild("Hit")
+                                if AttackRemote then
+                                    -- Teknik Spam: Membuat zombie seolah-olah hanya punya 1 HP
+                                    for i = 1, 15 do 
+                                        AttackRemote:FireServer(model)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+-- [[ LOGIKA BYPASS AUTO SKIP: INSTAN TANPA COOLDOWN ]]
+-- Menembus proteksi 5 detik di game
+task.spawn(function()
+    while task.wait(0.1) do
+        if Settings.AutoSkip then
+            local SkipEvent = game:GetService("ReplicatedStorage"):FindFirstChild("SkipWave") or game:GetService("ReplicatedStorage"):FindFirstChild("SkipStage")
+            if SkipEvent then
+                -- Mengirim sinyal beruntun agar bypass berhasil
+                for i = 1, 15 do 
+                    SkipEvent:FireServer()
+                end
+            end
+        end
+    end
+end)
+
+-- [[ TOMBOL KONTROL UI ]]
+Combat:NewToggle("Kill Aura (Zombies Only)", "Membantai Zombie Jarak Jauh", function(state)
+    Settings.AuraEnabled = state
+end)
+
+Combat:NewSlider("Aura Range", "Atur Jarak Serangan", 1000, 50, function(v)
+    Settings.AuraRange = v
+end)
+
+Farm:NewToggle("Instant Auto Skip", "Bypass Tunggu 5 Detik", function(state)
+    Settings.AutoSkip = state
+end)
+
+-- Tab Pengaturan Tambahan
+local Misc = Window:NewTab("Settings")
+Misc:NewSection("Menu Control"):NewKeybind("Hide/Show Menu", "Tekan Tombol Ini", Enum.KeyCode.RightControl, function()
+    Library:ToggleUI()
+end)
+
+print("--- SKRIP BISMA BERHASIL DIJALANKAN ---")
