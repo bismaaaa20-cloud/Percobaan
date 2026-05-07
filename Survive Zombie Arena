@@ -1,99 +1,52 @@
--- [[ BISMA ULTRA HUB V10 - OFFICIAL SCRIPT ]] --
--- Fitur: Aura Jauh, Hitbox, Skip Bypass, AFK Circle, Auto Buy, dsb.
+-- [[ BISMA HUB V10 - SCRIPT EXECUTION ]] --
+local BismaLib = loadstring(game:HttpGet("https://githubusercontent.com"))()
+local Window = BismaLib:CreateWindow("BISMA HUB V10")
 
--- 1. LOAD PRIVATE LIBRARY BISMA
-local BismaLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/bismaaaa20-cloud/Percobaan/refs/heads/main/BismaLib.lua"))()
-local Window = BismaLib:CreateWindow("BISMA V10 - ZOMBIE ARENA")
+local Settings = {AFK = false, Clear = false, Aura = false, AutoH = false, Range = 3000}
 
--- 2. KONFIGURASI SETTINGS
-local Settings = {
-    Aura = false, Skip = false, Range = 3000,
-    Hitbox = false, HealthBar = false, InfJump = false, 
-    Speed = 16, Noclip = false, AirSwim = false, AutoRejoin = true,
-    AutoHealth = false, AutoBuyGun = false, SkyCircle = true -- AFK Circle otomatis nyala
-}
+-- Tambahkan Tombol Sesuai Kebutuhan
+Window:AddToggle("AFK Sky Circle (Naik 30)", function(v) Settings.AFK = v end)
+Window:AddToggle("Instant Clear Wave (Nuke)", function(v) Settings.Clear = v end)
+Window:AddToggle("Global Kill Aura", function(v) Settings.Aura = v end)
+Window:AddToggle("Auto Buy Health (Hijau)", function(v) Settings.AutoH = v end)
 
--- 3. MENAMBAHKAN TOMBOL KE UI (Semua punya tombol sendiri)
-Window:AddToggle("Global Kill Aura (1 Map)", function(v) Settings.Aura = v end)
-Window:AddToggle("Instant Skip Wave (Bypass)", function(v) Settings.Skip = v end)
-Window:AddToggle("Hitbox Expander (Target Luas)", function(v) Settings.Hitbox = v end)
-Window:AddToggle("Zombie Health Bar", function(v) Settings.HealthBar = v end)
-Window:AddToggle("Infinite Jump", function(v) Settings.InfJump = v end)
-Window:AddToggle("Noclip (Tembus Tembok)", function(v) Settings.Noclip = v end)
-Window:AddToggle("Air Swim (Lincah Udara)", function(v) Settings.AirSwim = v end)
-Window:AddToggle("Auto Buy Health (Hijau)", function(v) Settings.AutoHealth = v end)
-Window:AddToggle("Auto Buy Gun (Pink)", function(v) Settings.AutoBuyGun = v end)
-Window:AddToggle("Auto Rejoin", function(v) Settings.AutoRejoin = v end)
-
--- 4. LOGIKA ENGINE (COMBAT & MOVEMENT)
+-- Logika Engine Utama
 task.spawn(function()
-    local counter = 0
-    local centerPos = nil
-    
-    while task.wait(0.1) do
+    local counter, centerPos = 0, nil
+    while task.wait(0.05) do
         local p = game.Players.LocalPlayer
         local char = p.Character
-        
         if char and char:FindFirstChild("HumanoidRootPart") then
-            -- AFK SKY CIRCLE (Always ON - Melayang & Berputar)
-            if not centerPos then centerPos = char.HumanoidRootPart.Position + Vector3.new(0, 30, 0) end
-            counter = counter + 0.05
-            local radius = 20
-            local x = math.cos(counter) * radius
-            local z = math.sin(counter) * radius
-            char.HumanoidRootPart.CFrame = CFrame.new(centerPos + Vector3.new(x, 0, z), centerPos)
+            -- Fitur AFK (Naik 30 Blok & Putar)
+            if Settings.AFK then
+                if not centerPos then centerPos = char.HumanoidRootPart.Position + Vector3.new(0, 30, 0) end
+                counter = counter + 0.05
+                char.HumanoidRootPart.CFrame = CFrame.new(centerPos + Vector3.new(math.cos(counter)*25, 0, math.sin(counter)*25), centerPos)
+                char.HumanoidRootPart.Velocity = Vector3.new(0,0,0)
+            else centerPos = nil end
 
-            -- AUTO BUY LOGIC (Klik Tempat)
-            local pGui = p:FindFirstChild("PlayerGui")
-            if pGui then
-                for _, v in pairs(pGui:GetDescendants()) do
-                    if v:IsA("TextButton") then
-                        if Settings.AutoHealth and v.BackgroundColor3.G > 0.6 then v:Activate() end
-                        if Settings.AutoBuyGun and v.BackgroundColor3.R > 0.5 and v.BackgroundColor3.B > 0.5 then v:Activate() end
+            -- Fitur Auto Buy (Deteksi Warna Tombol Hijau)
+            if Settings.AutoH then
+                local pGui = p:FindFirstChild("PlayerGui")
+                if pGui then
+                    for _, v in pairs(pGui:GetDescendants()) do
+                        if v:IsA("TextButton") and v.BackgroundColor3.G > 0.6 and v.Visible then v:Activate() end
                     end
                 end
             end
 
-            -- MOVEMENT (Noclip & Speed)
-            if Settings.Noclip then
-                for _, v in pairs(char:GetDescendants()) do if v:IsA("BasePart") then v.CanCollide = false end end
-            end
-            char.Humanoid.WalkSpeed = Settings.Speed
-
-            -- COMBAT & VISUALS (Scan 1 Map)
+            -- Fitur Combat (Aura & Nuke)
             for _, v in pairs(game.Workspace:GetDescendants()) do
                 if v:IsA("Humanoid") and v.Health > 0 and not game.Players:GetPlayerFromCharacter(v.Parent) then
-                    local root = v.Parent:FindFirstChild("HumanoidRootPart")
-                    if root then
-                        -- Hitbox Expander
-                        if Settings.Hitbox then root.Size = Vector3.new(20,20,20) root.Transparency = 0.7 root.CanCollide = false else root.Size = Vector3.new(2,2,2) root.Transparency = 0 end
-                        
-                        -- Aura Serang 1 Map
-                        if Settings.Aura and (char.HumanoidRootPart.Position - root.Position).Magnitude <= Settings.Range then
-                            local tool = char:FindFirstChildOfClass("Tool") or p.Backpack:FindFirstChildOfClass("Tool")
-                            if tool then 
-                                if tool.Parent ~= char then char.Humanoid:EquipTool(tool) end
-                                tool:Activate()
-                                local rem = game.ReplicatedStorage:FindFirstChild("Attack") or game.ReplicatedStorage:FindFirstChild("Hit")
-                                if rem then rem:FireServer(v.Parent) end
-                            end
+                    local r = v.Parent:FindFirstChild("HumanoidRootPart")
+                    if r then
+                        if Settings.Clear or (Settings.Aura and (char.HumanoidRootPart.Position - r.Position).Magnitude <= Settings.Range) then
+                            local rem = game.ReplicatedStorage:FindFirstChild("Attack") or game.ReplicatedStorage:FindFirstChild("Hit")
+                            if rem then rem:FireServer(v.Parent) end
                         end
                     end
                 end
             end
         end
-
-        -- Instant Skip Wave (Bypass Cooldown)
-        if Settings.Skip then
-            local sk = game.ReplicatedStorage:FindFirstChild("SkipWave") or game.ReplicatedStorage:FindFirstChild("Skip")
-            if sk then for i=1, 10 do sk:FireServer() end end
-        end
     end
 end)
-
--- Infinite Jump & Auto Rejoin
-game:GetService("UserInputService").JumpRequest:Connect(function()
-    if Settings.InfJump then game.Players.LocalPlayer.Character.Humanoid:ChangeState("Jumping") end
-end)
-
-print("BISMA V10 LOADED SUCCESSFULLY!")
