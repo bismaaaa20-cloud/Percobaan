@@ -1,1 +1,156 @@
-v
+
+-- FPSLab_BoosterTambahan.lua
+-- Add-on untuk FPS Lab. Bukan script mandiri: file ini mengembalikan fungsi pemasang.
+-- Pemakaian: pasang(A, BUILTIN, each) -> mengembalikan (true, jumlah_ditambah) atau (false, pesan_error)
+-- File ini tidak memanggil jaringan, tidak menulis file, tidak membuat koneksi event, tidak ada loop tak berujung.
+
+local function pasang(A, BUILTIN, each)
+	if type(A) ~= "table" or type(BUILTIN) ~= "table" or type(each) ~= "function" then
+		return false, "argumen harus (A: tabel, BUILTIN: tabel, each: fungsi)"
+	end
+
+	local Lighting = game:GetService("Lighting")
+
+	local function set(o, k, val) o[k] = val end
+
+	local function daftar(S, k)
+		return (S and S.idx and S.idx[k]) or {}
+	end
+
+	-- True bila instance milik karakter (Model ber-Humanoid); instance seperti itu dilewati.
+	local function isChar(v, cache)
+		local t = v
+		if v:IsA("Highlight") and v.Adornee then t = v.Adornee end
+		local m = t:IsA("Model") and t or t:FindFirstAncestorOfClass("Model")
+		if not m then return false end
+		local c = cache[m]
+		if c == nil then
+			c = m:FindFirstChildOfClass("Humanoid") ~= nil
+			cache[m] = c
+		end
+		return c
+	end
+
+	local function scan(list, fn)
+		local cache = {}
+		each(list, function(v)
+			local ok, ch = pcall(isChar, v, cache)
+			if ok and not ch then fn(v) end
+		end)
+	end
+
+	local function shdSmall(v, lim)
+		if v.Size.Magnitude < lim then v.CastShadow = false end
+	end
+
+	local function offHL(v)
+		if v:IsA("Highlight") then v.Enabled = false end
+	end
+
+	local function fog(L)
+		local e = math.min(L.FogEnd, 350)
+		local s = math.min(L.FogStart, e * 0.4)
+		L.FogStart = s
+		L.FogEnd = e
+	end
+
+	local function ql(n)
+		local r = settings().Rendering
+		local cur = r.QualityLevel.Value
+		local lv = Enum.QualityLevel:FromValue(n)
+		if lv and (cur == 0 or cur > n) then r.QualityLevel = lv end
+	end
+
+	local F = {}
+
+	-- Ubah: CastShadow semua part = false (GlobalShadows tetap). Risiko: bayangan benda hilang, scene terlihat datar.
+	F.shdPart = function(S)
+		scan(daftar(S, "part"), function(v) pcall(set, v, "CastShadow", false) end)
+	end
+
+	-- Ubah: CastShadow = false hanya untuk part kecil (diagonal < 8 stud). Risiko: bayangan properti kecil hilang, bangunan besar tetap berbayang.
+	F.shdKecil = function(S)
+		scan(daftar(S, "part"), function(v) pcall(shdSmall, v, 8) end)
+	end
+
+	-- Ubah: Enabled semua Light = false (GlobalShadows tetap). Risiko: area yang bergantung pada lampu jadi gelap.
+	F.lampuMati = function(S)
+		scan(daftar(S, "light"), function(v) pcall(set, v, "Enabled", false) end)
+	end
+
+	-- Ubah: EnvironmentSpecularScale dan EnvironmentDiffuseScale = 0. Risiko: pantulan langit hilang, scene lebih gelap dan datar.
+	F.envNol = function(S)
+		pcall(set, Lighting, "EnvironmentSpecularScale", 0)
+		pcall(set, Lighting, "EnvironmentDiffuseScale", 0)
+	end
+
+	-- Ubah: FogEnd maks 350 dan FogStart maks 40% FogEnd (hanya memperpendek). Risiko: pemandangan jauh tertutup kabut kelabu, manfaat FPS tergantung game.
+	F.kabutDekat = function(S)
+		pcall(fog, Lighting)
+	end
+
+	-- Ubah: Reflectance semua part = 0. Risiko: kaca, logam, dan lantai mengkilap jadi doff.
+	F.reflNol = function(S)
+		scan(daftar(S, "part"), function(v) pcall(set, v, "Reflectance", 0) end)
+	end
+
+	-- Ubah: Enabled semua Highlight = false (efek lain tetap). Risiko: outline dan penanda objek hilang.
+	F.hlMati = function(S)
+		scan(daftar(S, "fx"), function(v) pcall(offHL, v) end)
+	end
+
+	-- Ubah: bayangan part kecil off, Reflectance 0, Highlight off, EnvironmentSpecularScale 0. Risiko: kilau dan outline hilang, bayangan benda besar tetap.
+	F.komboSedang = function(S)
+		scan(daftar(S, "part"), function(v)
+			pcall(shdSmall, v, 8)
+			pcall(set, v, "Reflectance", 0)
+		end)
+		F.hlMati(S)
+		pcall(set, Lighting, "EnvironmentSpecularScale", 0)
+	end
+
+	-- Ubah: CastShadow dan Reflectance semua part, Light, Highlight, Environment 0, kabut dekat, kualitas turun ke Level 3 (hanya menurun). Risiko: tampilan datar dan gelap, jarak pandang pendek.
+	F.komboAgresif = function(S)
+		scan(daftar(S, "part"), function(v)
+			pcall(set, v, "CastShadow", false)
+			pcall(set, v, "Reflectance", 0)
+		end)
+		F.lampuMati(S)
+		F.hlMati(S)
+		F.envNol(S)
+		F.kabutDekat(S)
+		pcall(ql, 3)
+	end
+
+	local entri = {
+		{ id = "b_shd_part",      name = "Bayangan part mati",   key = "shdPart" },
+		{ id = "b_shd_kecil",     name = "Bayangan benda kecil", key = "shdKecil" },
+		{ id = "b_lampu_mati",    name = "Lampu mati",           key = "lampuMati" },
+		{ id = "b_env_nol",       name = "Lingkungan nol",       key = "envNol" },
+		{ id = "b_kabut_dekat",   name = "Kabut dekat",          key = "kabutDekat" },
+		{ id = "b_refl_nol",      name = "Pantulan nol",         key = "reflNol" },
+		{ id = "b_hl_mati",       name = "Highlight mati",       key = "hlMati" },
+		{ id = "b_kombo_sedang",  name = "Kombo sedang",         key = "komboSedang" },
+		{ id = "b_kombo_agresif", name = "Kombo agresif",        key = "komboAgresif" },
+	}
+
+	local ada = {}
+	for _, b in ipairs(BUILTIN) do
+		if type(b) == "table" and b.id then ada[b.id] = true end
+	end
+
+	local tambah = 0
+	for _, d in ipairs(entri) do
+		local fn = F[d.key]
+		if A[d.key] == nil then A[d.key] = fn end
+		if not ada[d.id] then
+			table.insert(BUILTIN, { id = d.id, name = d.name, fn = fn })
+			ada[d.id] = true
+			tambah += 1
+		end
+	end
+
+	return true, tambah
+end
+
+return pasang
